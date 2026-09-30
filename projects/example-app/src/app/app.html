@@ -1,0 +1,244 @@
+<header class="page-header">
+  <p class="eyebrow">Angular + Rust</p>
+  <h1>JS vs Rust (WebAssembly) — Benchmark</h1>
+  <p class="intro">
+    Ogni scheda esegue <strong>lo stesso identico algoritmo</strong> una volta in
+    JavaScript e una volta in Rust compilato in WebAssembly, misurando il
+    tempo di calcolo con <code>performance.now()</code>. Modifica il
+    parametro di ciascun test per farne variare il carico di lavoro.
+  </p>
+</header>
+
+<div class="benchmarks">
+  @for (bm of benchmarks; track bm.id) {
+    <section class="benchmark-card">
+      <h2>{{ bm.title }}</h2>
+      <p class="description">{{ bm.description }}</p>
+
+      <div class="controls">
+        <label [for]="bm.id">{{ bm.inputLabel }}</label>
+        <input
+          [id]="bm.id"
+          type="number"
+          [min]="bm.min"
+          [max]="bm.max"
+          [value]="bm.currentInput()"
+          (input)="bm.currentInput.set($any($event.target).valueAsNumber || bm.defaultValue)"
+        />
+        <button type="button" (click)="bm.run()" [disabled]="bm.calculating() || runningAll()">
+          {{ bm.calculating() ? 'Calcolo…' : 'Esegui' }}
+        </button>
+      </div>
+
+      @if (bm.calculating()) {
+        <p class="status">Calcolo in corso…</p>
+      } @else if (bm.jsResult() || bm.rsResult()) {
+        <table class="results">
+          <thead>
+            <tr>
+              <th scope="col">Ambiente</th>
+              <th scope="col">Risultato</th>
+              <th scope="col">Tempo</th>
+            </tr>
+          </thead>
+          <tbody>
+            @if (bm.jsResult()) {
+              <tr>
+                <th scope="row" class="env js">JavaScript</th>
+                <td class="result-value">{{ bm.jsResult() }}</td>
+                <td class="time">{{ bm.jsTime() }}</td>
+              </tr>
+            }
+            @if (bm.rsResult()) {
+              <tr>
+                <th scope="row" class="env rs">Rust (WASM)</th>
+                <td class="result-value">{{ bm.rsResult() }}</td>
+                <td class="time">{{ bm.rsTime() }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (bm.lastSpeedup(); as sp) {
+          <p class="speedup" [class.js]="sp.faster === 'js'" [class.rs]="sp.faster === 'rs'">
+            ⚡ {{ sp.label }}
+          </p>
+        }
+      }
+    </section>
+  }
+</div>
+
+<section class="summary">
+  <div class="summary-header">
+    <div>
+      <h2>Riepilogo comparativo</h2>
+      <p class="description">
+        Esegue tutti i test in sequenza, usando il valore attualmente
+        impostato in ciascuna scheda sopra, per il numero di ripetizioni
+        indicato, registrando il tempo di ogni singola esecuzione. Ogni click
+        su "Esegui" nelle schede aggiunge un punto anche qui: utile per
+        vedere se un ambiente è più stabile dell'altro lungo ripetizioni
+        successive (es. riscaldamento del JIT in JavaScript).
+      </p>
+    </div>
+
+    <div class="summary-controls">
+      <label for="repetitions">Ripetizioni per test</label>
+      <input
+        id="repetitions"
+        type="number"
+        min="1"
+        max="50"
+        [value]="repetitions()"
+        (change)="repetitions.set($any($event.target).valueAsNumber || 1)"
+      />
+      <button type="button" (click)="runAll()" [disabled]="runningAll()">
+        {{ runningAll() ? 'Esecuzione…' : 'Esegui tutti i test' }}
+      </button>
+    </div>
+  </div>
+
+  @if (progress()) {
+    <p class="status">{{ progress() }}</p>
+  }
+
+  @if (hasChartData()) {
+    <div class="chart-legend">
+      <span class="legend-item"><span class="swatch js"></span>JavaScript</span>
+      <span class="legend-item"><span class="swatch rs"></span>Rust (WASM)</span>
+      <span class="legend-note">punti = tempo per esecuzione · linea = trend di regressione lineare</span>
+    </div>
+
+    <div class="chart-grid">
+      @for (bm of benchmarks; track bm.id) {
+        @if (bm.chartData(); as chart) {
+          <figure class="chart-facet">
+            <figcaption>
+              {{ bm.title }}
+              @if (chart.speedup; as sp) {
+                <span class="facet-speedup" [class.js]="sp.faster === 'js'" [class.rs]="sp.faster === 'rs'">
+                  {{ sp.shortLabel }}
+                </span>
+              }
+            </figcaption>
+            <svg [attr.viewBox]="'0 0 ' + chart.width + ' ' + chart.height" role="img" [attr.aria-label]="'Tempi di esecuzione per ' + bm.title">
+              <line
+                class="axis"
+                [attr.x1]="chart.axisLeft" [attr.y1]="chart.axisTop"
+                [attr.x2]="chart.axisLeft" [attr.y2]="chart.axisBottom"
+              />
+              <line
+                class="axis"
+                [attr.x1]="chart.axisLeft" [attr.y1]="chart.axisBottom"
+                [attr.x2]="chart.axisRight" [attr.y2]="chart.axisBottom"
+              />
+
+              <text class="axis-label" [attr.x]="chart.axisLeft - 4" [attr.y]="chart.axisTop + 4" text-anchor="end">{{ chart.maxMsLabel }}</text>
+              <text class="axis-label" [attr.x]="chart.axisLeft - 4" [attr.y]="chart.axisBottom" text-anchor="end">0</text>
+
+              @if (chart.jsLine) {
+                <line class="reg js" [attr.x1]="chart.jsLine.x1" [attr.y1]="chart.jsLine.y1" [attr.x2]="chart.jsLine.x2" [attr.y2]="chart.jsLine.y2" />
+              }
+              @if (chart.rsLine) {
+                <line class="reg rs" [attr.x1]="chart.rsLine.x1" [attr.y1]="chart.rsLine.y1" [attr.x2]="chart.rsLine.x2" [attr.y2]="chart.rsLine.y2" />
+              }
+
+              @for (d of chart.jsDots; track $index) {
+                <circle class="dot js" [attr.cx]="d.x" [attr.cy]="d.y" r="3.5">
+                  <title>{{ d.label }}</title>
+                </circle>
+              }
+              @for (d of chart.rsDots; track $index) {
+                <circle class="dot rs" [attr.cx]="d.x" [attr.cy]="d.y" r="3.5">
+                  <title>{{ d.label }}</title>
+                </circle>
+              }
+            </svg>
+          </figure>
+        }
+      }
+    </div>
+
+    <div class="stats-table-wrapper">
+      <div class="stats-table-header">
+        <div>
+          <h3>Tabella riepilogativa</h3>
+          <p class="legend-note">
+            Media, mediana, deviazione standard campionaria, min/max in millisecondi;
+            speedup calcolato sulla media; significatività statistica via
+            <a href="https://it.wikipedia.org/wiki/Test_t_di_Welch" target="_blank" rel="noopener">test t di Welch</a>
+            a due code (varianze non assunte uguali), soglia p&nbsp;&lt;&nbsp;0.05.
+          </p>
+        </div>
+        <button type="button" (click)="downloadCsv()">Scarica CSV</button>
+      </div>
+
+      <div class="table-scroll">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th scope="col">Test</th>
+              <th scope="col">Ambiente</th>
+              <th scope="col">n</th>
+              <th scope="col">Media (ms)</th>
+              <th scope="col">Mediana (ms)</th>
+              <th scope="col">Dev.std (ms)</th>
+              <th scope="col">Min (ms)</th>
+              <th scope="col">Max (ms)</th>
+              <th scope="col">Speedup</th>
+              <th scope="col">p-value (Welch t)</th>
+              <th scope="col">Significativo</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (bm of benchmarks; track bm.id) {
+              @if (bm.stats(); as s) {
+                <tr>
+                  <th [attr.rowspan]="2" scope="rowgroup" class="test-name">{{ bm.title }}</th>
+                  <th scope="row" class="env js">JavaScript</th>
+                  <td>{{ s.js.n }}</td>
+                  <td>{{ s.js.mean.toFixed(2) }}</td>
+                  <td>{{ s.js.median.toFixed(2) }}</td>
+                  <td>{{ s.js.stddev !== null ? s.js.stddev.toFixed(2) : '—' }}</td>
+                  <td>{{ s.js.min.toFixed(2) }}</td>
+                  <td>{{ s.js.max.toFixed(2) }}</td>
+                  <td
+                    [attr.rowspan]="2"
+                    class="speedup-cell"
+                    [class.js]="s.speedup?.faster === 'js'"
+                    [class.rs]="s.speedup?.faster === 'rs'"
+                  >
+                    {{ s.speedup ? s.speedup.factor.toFixed(2) + '×' : '—' }}
+                  </td>
+                  <td [attr.rowspan]="2">{{ s.pValueLabel }}</td>
+                  <td [attr.rowspan]="2">
+                    @if (s.significant !== null) {
+                      <span [class.sig-yes]="s.significant" [class.sig-no]="!s.significant">
+                        {{ s.significant ? 'Sì' : 'No' }}
+                      </span>
+                    } @else {
+                      —
+                    }
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row" class="env rs">Rust (WASM)</th>
+                  <td>{{ s.rs.n }}</td>
+                  <td>{{ s.rs.mean.toFixed(2) }}</td>
+                  <td>{{ s.rs.median.toFixed(2) }}</td>
+                  <td>{{ s.rs.stddev !== null ? s.rs.stddev.toFixed(2) : '—' }}</td>
+                  <td>{{ s.rs.min.toFixed(2) }}</td>
+                  <td>{{ s.rs.max.toFixed(2) }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  } @else {
+    <p class="status">Nessun dato ancora: esegui almeno un test per popolare il grafico.</p>
+  }
+</section>
+
+<router-outlet />

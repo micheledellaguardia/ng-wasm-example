@@ -1,0 +1,1 @@
+/home/michele/Documenti/Repository/ng-wasm-example/projects/wasm-example/src/lib/example-rust-lib/target/wasm32-unknown-unknown/release/example_rust_lib.wasm: /home/michele/Documenti/Repository/ng-wasm-example/projects/wasm-example/src/lib/example-rust-lib/src/lib.rs
